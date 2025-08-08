@@ -16,6 +16,7 @@ import {getOptimalCostAndNutrition} from "./calculate";
 for (const recipe of recipeData) {
     recipeSummary[recipe.recipeName]= getOptimalCostAndNutrition(recipe)
 }
+console.log(JSON.stringify(recipeSummary, null, 2));
 /*
  * YOUR CODE ABOVE THIS, DO NOT MODIFY BELOW
  * */

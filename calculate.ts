@@ -3,9 +3,8 @@
 
 
 // Utility Functions
-import {Ingredient, Recipe, UoMName, UoMType} from "./supporting-files/models";
-import {GetRecipes, GetUnitsData} from "./supporting-files/data-access";
-import {ProductData} from "./supporting-files/data-raw";
+import {Recipe, UoMName, UoMType} from "./supporting-files/models";
+import {GetProductsForIngredient, GetUnitsData} from "./supporting-files/data-access";
 
 function convertUnits(amount: number, fromUnit: UoMName, toUnit: UoMName) {
     if (fromUnit === toUnit) return amount;
@@ -52,23 +51,15 @@ export function getOptimalCostAndNutrition(recipe: Recipe) {
 
     // Step 2: Find optimal suppliers (Linear Programming Solution)
     // @ts-ignore
-    const optimalSolution = solveLinearProgram(ingredients);
+    const optimalSolution = solveLinearProgram(recipe.lineItems,ingredients);
 
     // Step 3: Calculate nutrition at the cheapest cost
     const nutritionProfile = calculateNutritionAtOptimalCost(optimalSolution);
 
     // Step 4: Format results
     const result = {
-        recipeName: recipe.recipeName,
         cheapestCost: optimalSolution.totalCost,
-        costBreakdown: optimalSolution.costBreakdown,
-        optimalSuppliers: optimalSolution.suppliers,
         nutrientsAtCheapestCost: nutritionProfile,
-        linearProgrammingSolution: {
-            objectiveValue: optimalSolution.totalCost,
-            decisionVariables: optimalSolution.decisionVariables,
-            constraintsSatisfied: optimalSolution.constraintsSatisfied
-        }
     };
 
     return result;
@@ -83,16 +74,19 @@ function getStandardUnit(ingredient: string) {
     return units[ingredient.toLowerCase()] || 'units';
 }
 
-function solveLinearProgram(ingredients: Ingredient) {
+function solveLinearProgram(ingredients: any[],converted: any) {
 
     let totalCost = 0;
     const costBreakdown = {};
     const suppliers = {};
     const decisionVariables = {};
     const constraintsSatisfied = {};
+    let allProducts= ingredients.map(item=>GetProductsForIngredient(item.ingredient)).reduce((accumulator, currentChunk) => {
+        return accumulator.concat(currentChunk);
+    }, [])
 
     // For each ingredient, find the cheapest supplier (LP solution)
-    Object.entries(ingredients).forEach(([ingredientName, data]) => {
+    Object.entries(converted).forEach(([ingredientName, data]:[string,any]) => {
         let bestOption: any = {
             cost: Infinity,
             supplier: null,
@@ -100,9 +94,8 @@ function solveLinearProgram(ingredients: Ingredient) {
             pricePerUnit: Infinity,
             actualAmountNeeded: data.requiredAmount
         };
-
         // Search through all products for this ingredient
-        ProductData.forEach(product => {
+        allProducts.forEach(product => {
             if (isProductMatchingIngredient(product.productName, ingredientName)) {
                 product.supplierProducts.forEach(supplierProduct => {
                     const pricePerUnit = calculatePricePerUnit(supplierProduct, ingredientName);
@@ -212,13 +205,10 @@ function calculateNutritionAtOptimalCost(optimalSolution: any) {
                     rawNutrients[nutrientName] = 0;
                 }
                 rawNutrients[nutrientName] += nutrientAmount;
-
-                console.log(`  ${nutrientName}: +${nutrientAmount.toFixed(3)} ${nutrient.quantityAmount.uomName}`);
             });
         }
     });
 
-    console.log(`\nTotal recipe weight: ${totalRecipeWeight.toFixed(2)} grams`);
 
     // Second pass: Convert to per 100g format
     Object.entries(rawNutrients).forEach(([nutrientName, totalAmount]: [string, number]) => {
@@ -276,6 +266,6 @@ function calculateNutrientAmount(nutrient: any, amountUsed: number, ingredientNa
 }
 
 
-// Execute the optimization
-const optimizationResult = getOptimalCostAndNutrition(GetRecipes()[0]);
-console.log(JSON.stringify(optimizationResult, null, 2));
+// // Execute the optimization
+// const optimizationResult = getOptimalCostAndNutrition(GetRecipes()[0]);
+// console.log(JSON.stringify(optimizationResult, null, 2));
